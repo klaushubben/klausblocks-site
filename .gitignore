@@ -1,0 +1,15 @@
+.DS_Store
+
+# Local config / secrets
+.env
+.env.*
+
+# Dependencies and build outputs, if this becomes a built site later.
+node_modules/
+dist/
+build/
+.cache/
+
+# Logs
+*.log
+

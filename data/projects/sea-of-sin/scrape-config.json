@@ -1,0 +1,30 @@
+{
+  "project": {
+    "slug": "sea-of-sin",
+    "title": "Sea of Sin",
+    "platform": "fxhash",
+    "chain": "tezos",
+    "sourceUrl": "https://www.fxhash.xyz/project/sea-of-sin",
+    "objktUrl": "https://objkt.com/collections/fxhash/projects/3643",
+    "expectedCount": 128
+  },
+  "fxhash": {
+    "endpoint": "https://api.fxhash.xyz/graphql",
+    "projectId": "3643",
+    "slug": "sea-of-sin"
+  },
+  "objkt": {
+    "endpoint": "https://data.objkt.com/v3/graphql",
+    "faContract": "",
+    "tokenIdMin": "",
+    "tokenIdMax": "",
+    "nameIlike": "%Sea of Sin%",
+    "enabled": false
+  },
+  "scrape": {
+    "pageSize": 50,
+    "delayMs": 1500,
+    "downloadMedia": false,
+    "mediaGateway": "https://ipfs.io/ipfs/"
+  }
+}

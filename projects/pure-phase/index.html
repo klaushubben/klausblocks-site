@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pure Phase / klausblocks</title>
+    <link rel="icon" href="../../favicon.ico" sizes="any" />
+    <meta name="description" content="Pure Phase by klaus, collected on fxhash." />
+    <link rel="stylesheet" href="../../project-grid.css" />
+    <script src="./project-data.js"></script>
+    <script src="../../project-grid.js" defer></script>
+  </head>
+  <body>
+    <div class="project-page" data-project-page data-tokens="./tokens.json" data-thumbnails="./thumbnails.json" data-renderer-base="./renderer/tokens/">
+      <header class="project-header" aria-label="Project header">
+        <a class="wordmark brand-name" href="../../index.html" aria-label="klausblocks home">klaus<span class="brand-blocks">blocks</span></a>
+        <nav class="project-nav" aria-label="Project navigation">
+          <a href="../../index.html#projects">projects</a>
+          <a href="https://www.fxhash.xyz/project/pure-phase">fxhash</a>
+        </nav>
+      </header>
+
+      <main>
+        <section class="project-hero" aria-labelledby="project-title">
+          <p class="eyebrow">fxhash / tezos / 2022</p>
+          <h1 class="project-title" id="project-title">Pure Phase</h1>
+        </section>
+
+        <section class="grid-shell" aria-label="Pure Phase iterations">
+          <div class="grid-toolbar">
+            <p class="eyebrow">iterations</p>
+            <p class="project-count" data-token-count>loading</p>
+          </div>
+          <div class="token-grid" data-token-grid></div>
+        </section>
+      </main>
+    </div>
+
+    <aside class="viewer" data-viewer aria-label="Token viewer">
+      <div class="viewer-media" data-viewer-media>
+        <img data-viewer-image alt="" />
+        <iframe class="viewer-frame" data-viewer-frame title="Live Pure Phase renderer" frameborder="0" scrolling="no"></iframe>
+      </div>
+      <div class="viewer-panel">
+        <button class="viewer-close" type="button" data-viewer-close>close</button>
+        <h2 class="viewer-title" data-viewer-title></h2>
+        <div class="detail-list" data-detail-list></div>
+      </div>
+    </aside>
+  </body>
+</html>

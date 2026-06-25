@@ -1,0 +1,232 @@
+window.KLAUSBLOCKS_HEN = {
+  "project": {
+    "name": "hic et nunc",
+    "artist": "klaus",
+    "chain": "tezos",
+    "platform": "hic et nunc",
+    "archiveStatus": "complete",
+    "notes": "Original HeN mints archived from TzKT operation data and IPFS metadata. OBJKT later became the practical browsing surface after HeN disappeared. Minted supply and current supply are tracked separately when editions were burned."
+  },
+  "tokens": [
+    {
+      "platform": "hic et nunc",
+      "migrationContext": "HeN data later surfaced through OBJKT after hic et nunc went offline.",
+      "minterContract": "KT1Hkg5qeNhfwpKW4fXvq7HGZB9z2EnmCCA9",
+      "minterContractAlias": "hic et nunc Minter",
+      "tokenContract": "KT1RJ6PbjHpwc3M5rw5s2Nbmefwbuwbdxton",
+      "henObjktId": "1124",
+      "name": "Zach's Tree (pixel version)",
+      "description": "Generated image where each pixel is picked randomly from photos of the same tree over 1 year.",
+      "tags": [],
+      "creators": [
+        "tz1L1XwcVmD2z4qPfLtBJ6RPThgAwLcXG6kW"
+      ],
+      "royalties": 150,
+      "mintedAt": "2021-03-06T14:32:44Z",
+      "operationHash": "onnTFGWf3sCpZ62qQg7hud1LA2QP8zrA8aXQQntuiSDfnymmz4t",
+      "operationCounter": 11248020,
+      "tzktUrl": "https://tzkt.io/onnTFGWf3sCpZ62qQg7hud1LA2QP8zrA8aXQQntuiSDfnymmz4t/11248020",
+      "metadataUri": "ipfs://QmWPKGqP8F4RA3sCrP1hWXLwC1PUV1HWefVSnesGQm8Hb3",
+      "artifactUri": "ipfs://QmNM3kokKgdgQwaWMmjDeii3xNKvro67YYmeVPCm4jaeXb",
+      "thumbnailUri": "ipfs://QmNrhZHUaEqxhyLfqoq1mtHSipkWHeT31LNHb1QEbDHgnc",
+      "formats": [
+        {
+          "uri": "ipfs://QmNM3kokKgdgQwaWMmjDeii3xNKvro67YYmeVPCm4jaeXb",
+          "mimeType": "image/png"
+        }
+      ],
+      "mintedSupply": 1,
+      "currentSupply": 1,
+      "burnedSupply": 0,
+      "supplyNote": "Single mint / single supply.",
+      "localArtifact": "./assets/1124.png"
+    },
+    {
+      "platform": "hic et nunc",
+      "migrationContext": "HeN data later surfaced through OBJKT after hic et nunc went offline.",
+      "minterContract": "KT1Hkg5qeNhfwpKW4fXvq7HGZB9z2EnmCCA9",
+      "minterContractAlias": "hic et nunc Minter",
+      "tokenContract": "KT1RJ6PbjHpwc3M5rw5s2Nbmefwbuwbdxton",
+      "henObjktId": "2077",
+      "name": "Trans Europa Express",
+      "description": "\"Vinylwave\" process with Kraftwerk. ",
+      "tags": [],
+      "creators": [
+        "tz1L1XwcVmD2z4qPfLtBJ6RPThgAwLcXG6kW"
+      ],
+      "royalties": 100,
+      "mintedAt": "2021-03-08T14:53:04Z",
+      "operationHash": "onhTypb4wFMqA7xPNChHLRMUZmoA4HNXpVT1to56roqG7XLWfMZ",
+      "operationCounter": 11248028,
+      "tzktUrl": "https://tzkt.io/onhTypb4wFMqA7xPNChHLRMUZmoA4HNXpVT1to56roqG7XLWfMZ/11248028",
+      "metadataUri": "ipfs://Qmb9YdYx5YfWX88BDGtu8jn97vN5wANrMZcTMdipT5EozJ",
+      "artifactUri": "ipfs://QmXB2JQubMViMqgJ7bcN7KX4bCTsNSu2d8sty1xD96tctv",
+      "thumbnailUri": "ipfs://QmNrhZHUaEqxhyLfqoq1mtHSipkWHeT31LNHb1QEbDHgnc",
+      "formats": [
+        {
+          "uri": "ipfs://QmXB2JQubMViMqgJ7bcN7KX4bCTsNSu2d8sty1xD96tctv",
+          "mimeType": "image/png"
+        }
+      ],
+      "mintedSupply": 5,
+      "currentSupply": 1,
+      "burnedSupply": 4,
+      "supplyNote": "Minted 5; 4 editions burned; current supply verified by artist as 1.",
+      "localArtifact": "./assets/2077.png"
+    },
+    {
+      "platform": "hic et nunc",
+      "migrationContext": "HeN data later surfaced through OBJKT after hic et nunc went offline.",
+      "minterContract": "KT1Hkg5qeNhfwpKW4fXvq7HGZB9z2EnmCCA9",
+      "minterContractAlias": "hic et nunc Minter",
+      "tokenContract": "KT1RJ6PbjHpwc3M5rw5s2Nbmefwbuwbdxton",
+      "henObjktId": "2729",
+      "name": "Windowlicker (blue 01)",
+      "description": "Audio waveform projection onto 12\" vinyl form. @klaushubben",
+      "tags": [
+        "waveform",
+        "audio",
+        "aphex",
+        "openFrameworks",
+        "vinyl"
+      ],
+      "creators": [
+        "tz1L1XwcVmD2z4qPfLtBJ6RPThgAwLcXG6kW"
+      ],
+      "royalties": 100,
+      "mintedAt": "2021-03-09T13:17:38Z",
+      "operationHash": "oo3C2WNiq1U44wPbWY22ZbUEg56VszwHPZc4UZC9s6keActoAD3",
+      "operationCounter": 11248039,
+      "tzktUrl": "https://tzkt.io/oo3C2WNiq1U44wPbWY22ZbUEg56VszwHPZc4UZC9s6keActoAD3/11248039",
+      "metadataUri": "ipfs://QmeuXmRPFN94HL3qCS8tH4m9HajsJQFj15TCDRgm8zeQRb",
+      "artifactUri": "ipfs://Qmb9tZAKW39B9wYhgahogaozwUw9UhZHJ8X1jXHqUmGBkw",
+      "thumbnailUri": "ipfs://QmNrhZHUaEqxhyLfqoq1mtHSipkWHeT31LNHb1QEbDHgnc",
+      "formats": [
+        {
+          "uri": "ipfs://Qmb9tZAKW39B9wYhgahogaozwUw9UhZHJ8X1jXHqUmGBkw",
+          "mimeType": "image/png"
+        }
+      ],
+      "mintedSupply": 10,
+      "currentSupply": 10,
+      "supplyNote": "Minted supply and current supply verified as 10.",
+      "burnedSupply": 0,
+      "localArtifact": "./assets/2729.png"
+    },
+    {
+      "platform": "hic et nunc",
+      "migrationContext": "HeN data later surfaced through OBJKT after hic et nunc went offline.",
+      "minterContract": "KT1Hkg5qeNhfwpKW4fXvq7HGZB9z2EnmCCA9",
+      "minterContractAlias": "hic et nunc Minter",
+      "tokenContract": "KT1RJ6PbjHpwc3M5rw5s2Nbmefwbuwbdxton",
+      "henObjktId": "3210",
+      "name": "Something About Us (Orange 01)",
+      "description": "Artist: @klaushubben | Daft Punk audio waveform projection on 12\" vinyl",
+      "tags": [
+        "waveform",
+        "audio",
+        "daftpunk",
+        "openframeworks",
+        "visualization"
+      ],
+      "creators": [
+        "tz1L1XwcVmD2z4qPfLtBJ6RPThgAwLcXG6kW"
+      ],
+      "royalties": 100,
+      "mintedAt": "2021-03-10T03:53:34Z",
+      "operationHash": "onyoEzeDddd2FLJWFizwoAdfFve6sQEVPKAWasZuhHzqtxCzE7b",
+      "operationCounter": 11248042,
+      "tzktUrl": "https://tzkt.io/onyoEzeDddd2FLJWFizwoAdfFve6sQEVPKAWasZuhHzqtxCzE7b/11248042",
+      "metadataUri": "ipfs://QmW4So5q4tvxicYm2PFy5nGnoiztJbj8bRkmoAH8HCjb4w",
+      "artifactUri": "ipfs://Qmam9bN1oQZY36L5YBCJVUJZmp9jGL28grnoWdcuqgfSX3",
+      "thumbnailUri": "ipfs://QmNrhZHUaEqxhyLfqoq1mtHSipkWHeT31LNHb1QEbDHgnc",
+      "formats": [
+        {
+          "uri": "ipfs://Qmam9bN1oQZY36L5YBCJVUJZmp9jGL28grnoWdcuqgfSX3",
+          "mimeType": "image/png"
+        }
+      ],
+      "mintedSupply": 10,
+      "currentSupply": 1,
+      "supplyNote": "Current supply verified by artist as 1 after burns.",
+      "burnedSupply": 9,
+      "localArtifact": "./assets/3210.png"
+    },
+    {
+      "platform": "hic et nunc",
+      "migrationContext": "HeN data later surfaced through OBJKT after hic et nunc went offline.",
+      "minterContract": "KT1Hkg5qeNhfwpKW4fXvq7HGZB9z2EnmCCA9",
+      "minterContractAlias": "hic et nunc Minter",
+      "tokenContract": "KT1RJ6PbjHpwc3M5rw5s2Nbmefwbuwbdxton",
+      "henObjktId": "3574",
+      "name": "Freak (magenta 01)",
+      "description": "Artist: @klaushubben | audio waveform from LFO's 'Freak' projected onto 12\" vinyl form",
+      "tags": [
+        "waveform",
+        "audio",
+        "lfo",
+        "openframeworks",
+        "magenta"
+      ],
+      "creators": [
+        "tz1L1XwcVmD2z4qPfLtBJ6RPThgAwLcXG6kW"
+      ],
+      "royalties": 100,
+      "mintedAt": "2021-03-10T16:19:09Z",
+      "operationHash": "onmKenU74DQFzSMyRxh63dBh7tEoCLXJoJsVf1eBxmBWdYFBSLz",
+      "operationCounter": 11248047,
+      "tzktUrl": "https://tzkt.io/onmKenU74DQFzSMyRxh63dBh7tEoCLXJoJsVf1eBxmBWdYFBSLz/11248047",
+      "metadataUri": "ipfs://QmSK3xdM8Rtfm9yeReaM6sF24Q64kX6xDadjCVtWfC3ewj",
+      "artifactUri": "ipfs://QmexMR7QrciQH9L5UK9dY1VuDUXMWtpsTfm87vyYp8A6nY",
+      "thumbnailUri": "ipfs://QmNrhZHUaEqxhyLfqoq1mtHSipkWHeT31LNHb1QEbDHgnc",
+      "formats": [
+        {
+          "uri": "ipfs://QmexMR7QrciQH9L5UK9dY1VuDUXMWtpsTfm87vyYp8A6nY",
+          "mimeType": "image/png"
+        }
+      ],
+      "mintedSupply": 10,
+      "currentSupply": 1,
+      "supplyNote": "Current supply verified by artist as 1 after burns.",
+      "burnedSupply": 9,
+      "localArtifact": "./assets/3574.png"
+    },
+    {
+      "platform": "hic et nunc",
+      "migrationContext": "HeN data later surfaced through OBJKT after hic et nunc went offline.",
+      "minterContract": "KT1Hkg5qeNhfwpKW4fXvq7HGZB9z2EnmCCA9",
+      "minterContractAlias": "hic et nunc Minter",
+      "tokenContract": "KT1RJ6PbjHpwc3M5rw5s2Nbmefwbuwbdxton",
+      "henObjktId": "381263",
+      "name": "a hard rain's gonna fall",
+      "description": "static, 2250x3000, PNG",
+      "tags": [
+        "p5",
+        "nature",
+        "abstract"
+      ],
+      "creators": [
+        "tz1L1XwcVmD2z4qPfLtBJ6RPThgAwLcXG6kW"
+      ],
+      "royalties": 120,
+      "mintedAt": "2021-10-01T13:53:46Z",
+      "operationHash": "onqxB5ZAY9VBazsuUDbfeNLTB7Jm6nmEoyrQe5oCCzmmhSM8H6X",
+      "operationCounter": 11249412,
+      "tzktUrl": "https://tzkt.io/onqxB5ZAY9VBazsuUDbfeNLTB7Jm6nmEoyrQe5oCCzmmhSM8H6X/11249412",
+      "metadataUri": "ipfs://QmZuhu5fXJpuAxXndXnh8EFFof53f8tGzri7KmjM2yCksD",
+      "artifactUri": "ipfs://QmciPM2zUQN9fhGNghqpoxnPPca3mM95GC4S3LWKu6KTPq",
+      "thumbnailUri": "ipfs://QmNrhZHUaEqxhyLfqoq1mtHSipkWHeT31LNHb1QEbDHgnc",
+      "formats": [
+        {
+          "uri": "ipfs://QmciPM2zUQN9fhGNghqpoxnPPca3mM95GC4S3LWKu6KTPq",
+          "mimeType": "image/png"
+        }
+      ],
+      "mintedSupply": 3,
+      "currentSupply": 3,
+      "burnedSupply": 0,
+      "supplyNote": "Minted supply and current supply treated as 3.",
+      "localArtifact": "./assets/381263.png"
+    }
+  ]
+};

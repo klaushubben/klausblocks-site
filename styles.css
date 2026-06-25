@@ -1,0 +1,215 @@
+:root {
+  color-scheme: dark;
+  --bg: #242422;
+  --text: #f2efe7;
+  --muted: rgba(242, 239, 231, 0.58);
+  --line: rgba(242, 239, 231, 0.17);
+  --blocks-text: #8e8e88;
+  --page-width: 1680px;
+  --page-gutter: clamp(20px, 4vw, 72px);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--bg);
+  font-size: 16px;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  color: var(--text);
+  background:
+    linear-gradient(rgba(242, 239, 231, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(242, 239, 231, 0.04) 1px, transparent 1px),
+    var(--bg);
+  background-size: 34px 34px, 34px 34px, auto;
+}
+
+a {
+  color: inherit;
+}
+
+.page-shell {
+  width: min(calc(100% - (var(--page-gutter) * 2)), var(--page-width));
+  margin: 0 auto;
+  min-height: 100vh;
+  padding: 0 0 2rem;
+}
+
+.wordmark,
+.eyebrow,
+.project-meta,
+.site-footer p,
+.social-links {
+  font-size: 0.78rem;
+  letter-spacing: 0.14em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.wordmark,
+.postcard a,
+.site-footer a {
+  text-decoration: none;
+}
+
+.wordmark,
+.intro h1,
+.postcard h2 {
+  font-weight: 700;
+}
+
+.brand-name {
+  white-space: nowrap;
+}
+
+.brand-blocks {
+  color: var(--blocks-text);
+}
+
+.site-footer a:hover,
+.site-footer a:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+}
+
+.intro {
+  padding: clamp(4rem, 12vh, 8rem) 0 clamp(2rem, 6vh, 4rem);
+}
+
+.eyebrow,
+.project-meta,
+.site-footer p,
+.social-links {
+  margin: 0;
+  color: var(--muted);
+}
+
+.intro h1 {
+  margin: 0.35rem 0 0;
+  font-size: clamp(2.7rem, 6vw, 5.5rem);
+  line-height: 0.9;
+  letter-spacing: 0;
+}
+
+.projects-section {
+  padding: 0 0 clamp(4rem, 8vw, 7rem);
+}
+
+.postcard-list {
+  display: grid;
+  gap: clamp(2.5rem, 7vw, 6rem);
+}
+
+.postcard {
+  border-top: 1px solid var(--line);
+  padding-top: 1rem;
+}
+
+.postcard a {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.postcard-copy {
+  display: grid;
+  gap: 0.3rem;
+  justify-items: start;
+}
+
+.postcard h2 {
+  margin: 0;
+  font-size: clamp(2rem, 5vw, 5.25rem);
+  line-height: 0.9;
+  letter-spacing: 0;
+}
+
+.postcard-image {
+  height: clamp(220px, 34vw, 460px);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: rgba(20, 20, 19, 0.46);
+}
+
+.postcard-image img {
+  display: block;
+  width: min(100%, 920px);
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  transition:
+    filter 180ms ease,
+    transform 240ms ease;
+}
+
+.postcard-image-pixel img {
+  width: min(100%, 720px);
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.postcard a:hover .postcard-image img,
+.postcard a:focus-visible .postcard-image img {
+  filter: contrast(1.05);
+  transform: translateY(-2px);
+}
+
+.postcard a:focus-visible {
+  outline: 1px solid var(--text);
+  outline-offset: 0.35rem;
+}
+
+.site-footer {
+  padding: 1rem 0 0;
+  border-top: 1px solid var(--line);
+}
+
+.social-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.9rem;
+  padding-top: 0.65rem;
+}
+
+.social-links a {
+  display: inline-flex;
+  align-items: center;
+}
+
+.social-links :is(svg, img) {
+  width: 0.95rem;
+  height: 0.95rem;
+  flex: 0 0 auto;
+}
+
+.social-links svg {
+  fill: currentColor;
+}
+
+.social-links a[aria-label="Art Blocks"] img,
+.social-links a[aria-label="LinkedIn"] img {
+  filter: brightness(0) invert(1) opacity(0.58);
+}
+
+@media (max-width: 760px) {
+  :root {
+    --page-gutter: 20px;
+  }
+
+  .intro {
+    padding-top: 4.5rem;
+  }
+
+  .postcard-image {
+    height: clamp(190px, 54vw, 340px);
+  }
+}
