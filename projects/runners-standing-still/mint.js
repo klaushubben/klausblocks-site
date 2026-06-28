@@ -6,8 +6,35 @@ const state = {
   sortMode: "recent",
   samples: [],
   totalSupply: Number(config.initialMintedCount || 0),
+  saleActive: false,
+  mintPriceWei: config.mintPriceWei || "0",
   account: "",
   minting: false,
+  activeOwner: "",
+  activeTokenId: "",
+  collectorTokens: [],
+  collectorScanKey: "",
+  collectorScanning: false,
+};
+
+const runnerContract = {
+  reads: {
+    totalSupply: { selector: "0x18160ddd", returns: "uint256" },
+    saleActive: { selector: "0x68428a1b", returns: "bool" },
+    mintPrice: { selector: "0x6817c76c", returns: "uint256" },
+    ownerOf: { selector: "0x6352211e", returns: "address", args: ["uint256"] },
+    tokenSeed: { selector: "0x5f516836", returns: "bytes32", args: ["uint256"] },
+    tokenMinter: { selector: "0x7c57d947", returns: "address", args: ["uint256"] },
+    mintBlock: { selector: "0x5b706838", returns: "uint256", args: ["uint256"] },
+    tokenRevealed: { selector: "0x9d897351", returns: "bool", args: ["uint256"] },
+  },
+  writes: {
+    mint: { selector: "0x1249c58b" },
+    reveal: { selector: "0xc2ca0ac5", args: ["uint256"] },
+  },
+  events: {
+    transfer: "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+  },
 };
 
 const els = {
@@ -27,6 +54,19 @@ const els = {
   liveSource: document.querySelector("[data-live-source]"),
   liveBlock: document.querySelector("[data-live-block]"),
   liveEpoch: document.querySelector("[data-live-epoch]"),
+  tokenOwner: document.querySelector("[data-token-owner]"),
+  tokenOwnerValue: document.querySelector("[data-token-owner-value]"),
+  mintModal: document.querySelector("[data-mint-modal]"),
+  mintModalClose: document.querySelector("[data-mint-modal-close]"),
+  mintModalKicker: document.querySelector("[data-mint-modal-kicker]"),
+  mintModalTitle: document.querySelector("[data-mint-modal-title]"),
+  mintModalStatus: document.querySelector("[data-mint-modal-status]"),
+  mintModalTx: document.querySelector("[data-mint-modal-tx]"),
+  mintModalToken: document.querySelector("[data-mint-modal-token]"),
+  mintModalOwner: document.querySelector("[data-mint-modal-owner]"),
+  mintModalHash: document.querySelector("[data-mint-modal-hash]"),
+  mintModalPreviewWrap: document.querySelector("[data-mint-modal-preview-wrap]"),
+  mintModalPreview: document.querySelector("[data-mint-modal-preview]"),
 };
 
 const featureKeys = {
@@ -75,7 +115,7 @@ async function init() {
   await loadRendererScript();
   await loadSampleManifest();
   renderMintedCount();
-  refreshTotalSupply();
+  refreshContractState();
   renderRandomPreview();
   renderSampleGrid();
 }
@@ -88,6 +128,10 @@ function wireEvents() {
   els.walletToggle.addEventListener("focus", showDisconnectLabel);
   els.walletToggle.addEventListener("blur", updateWalletUi);
   els.mintRandom.addEventListener("click", mintRandomIteration);
+  els.mintModalClose.addEventListener("click", closeMintModal);
+  els.mintModal.addEventListener("click", (event) => {
+    if (event.target === els.mintModal) closeMintModal();
+  });
   els.fullscreenOpen.addEventListener("click", openFullscreenPreview);
   els.fullscreenClose.addEventListener("click", closeFullscreenPreview);
   els.previewOverlay.addEventListener("click", (event) => {
@@ -99,9 +143,12 @@ function wireEvents() {
   window.addEventListener("message", handleRendererMessage);
 
   els.sortButtons.forEach((button) => {
-    button.addEventListener("click", () => {
+    button.addEventListener("click", async () => {
       state.sortMode = button.dataset.sort;
       renderSampleGrid();
+      if (state.sortMode === "collector") {
+        await ensureCollectorTokens();
+      }
     });
   });
 
@@ -151,6 +198,7 @@ async function loadSampleManifest() {
       name: sample.name || `Sample #${index + 1}`,
       image: sample.image || "",
       hash: sample.hash || "",
+      addedAt: 0,
     }));
   } catch {
     state.samples = [];
@@ -164,6 +212,7 @@ function renderRandomPreview() {
 async function toggleWallet() {
   if (state.account) {
     state.account = "";
+    resetCollectorScan();
     updateWalletUi();
     renderSampleGrid();
     return;
@@ -178,8 +227,12 @@ async function toggleWallet() {
     await ensureConfiguredChain();
     const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
     state.account = accounts[0] || "";
+    resetCollectorScan();
     updateWalletUi();
     renderSampleGrid();
+    if (state.sortMode === "collector") {
+      await ensureCollectorTokens();
+    }
   } catch (error) {
     console.warn("Wallet connection failed", error);
   }
@@ -187,14 +240,18 @@ async function toggleWallet() {
 
 function handleAccountsChanged(accounts) {
   state.account = accounts[0] || "";
+  resetCollectorScan();
   updateWalletUi();
   renderSampleGrid();
+  if (state.sortMode === "collector") {
+    ensureCollectorTokens();
+  }
 }
 
 function updateWalletUi() {
   const connected = Boolean(state.account);
   els.walletToggle.textContent = connected ? shortAddress(state.account) : "CONNECT";
-  els.mintRandom.disabled = !connected || state.minting || !config.tokenAddress;
+  els.mintRandom.disabled = !connected || state.minting || !config.tokenAddress || !state.saleActive;
   els.mintRandom.textContent = state.minting ? "MINTING" : "MINT RANDOM";
 }
 
@@ -204,25 +261,30 @@ function renderMintedCount() {
 }
 
 async function refreshTotalSupply() {
-  if (!config.rpcUrl || !config.tokenAddress) return;
-
   try {
-    const response = await fetch(config.rpcUrl, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id: Date.now(),
-        method: "eth_call",
-        params: [{ to: config.tokenAddress, data: "0x18160ddd" }, "latest"],
-      }),
-    });
-    const payload = await response.json();
-    if (!payload.result) return;
-    state.totalSupply = Number(BigInt(payload.result));
+    state.totalSupply = Number(await readRunner("totalSupply"));
     renderMintedCount();
   } catch (error) {
     console.warn("Unable to refresh total supply", error);
+  }
+}
+
+async function refreshContractState() {
+  if (!config.rpcUrl || !config.tokenAddress) return;
+
+  try {
+    const [totalSupply, saleActive, mintPriceWei] = await Promise.all([
+      readRunner("totalSupply"),
+      readRunner("saleActive"),
+      readRunner("mintPrice"),
+    ]);
+    state.totalSupply = Number(totalSupply);
+    state.saleActive = Boolean(saleActive);
+    state.mintPriceWei = String(mintPriceWei);
+    renderMintedCount();
+    updateWalletUi();
+  } catch (error) {
+    console.warn("Unable to refresh contract state", error);
   }
 }
 
@@ -259,38 +321,78 @@ async function mintRandomIteration() {
 
   state.minting = true;
   updateWalletUi();
+  openMintModal({
+    title: "Minting",
+    status: "Waiting for wallet confirmation.",
+    owner: state.account,
+  });
 
   try {
     await ensureConfiguredChain();
-    const txHash = await window.ethereum.request({
-      method: "eth_sendTransaction",
-      params: [{
-        from: state.account,
-        to: config.tokenAddress,
-        value: `0x${BigInt(config.mintPriceWei || "0").toString(16)}`,
-        data: "0x1249c58b",
-      }],
+    const txHash = await sendRunnerTransaction("mint", [], {
+      value: `0x${BigInt(state.mintPriceWei || config.mintPriceWei || "0").toString(16)}`,
     });
-    console.info("Mint transaction submitted", txHash);
-    refreshTotalSupply();
+    updateMintModal({
+      status: "Transaction submitted. Waiting for confirmation.",
+      txHash,
+    });
+
+    const receipt = await waitForTransactionReceipt(txHash);
+    const tokenId = tokenIdFromTransferReceipt(receipt);
+    updateMintModal({
+      title: tokenId ? "Mint confirmed" : "Complete",
+      status: tokenId ? "Mint confirmed. Waiting for reveal block." : "Transaction confirmed.",
+      tokenId,
+    });
+
+    await refreshTotalSupply();
+
+    if (tokenId) {
+      const pendingToken = {
+        id: tokenId,
+        name: `Runners Standing Still #${tokenId}`,
+        image: "",
+        hash: "",
+        owner: state.account,
+        minter: state.account,
+        revealed: false,
+        addedAt: Date.now(),
+      };
+      rememberMintedToken(pendingToken);
+
+      await revealTokenIntoModal(tokenId, pendingToken);
+    }
   } catch (error) {
     console.warn("Mint failed", error);
+    updateMintModal({
+      title: "Cancelled",
+      status: readableWalletError(error),
+    });
   } finally {
     state.minting = false;
     updateWalletUi();
   }
 }
 
-function renderHash(hash, tokenId) {
+async function renderHash(hash, tokenId, tokenMeta = {}) {
   els.previewHash.textContent = hash;
+  state.activeTokenId = String(tokenId);
+  state.activeOwner = tokenMeta.owner || "";
+  renderOwnerLine("");
   resetTraits();
   els.previewFrame.srcdoc = buildHtml({
     hash,
     tokenId,
     contractAddress: config.tokenAddress || "",
     chainId: config.chainId ? String(Number.parseInt(config.chainId, 16)) : "",
-    minter: "",
+    minter: tokenMeta.minter || tokenMeta.owner || "",
   });
+
+  if (tokenMeta.owner) {
+    renderOwnerLine(await displayNameForAddress(tokenMeta.owner));
+  } else if (isConcreteTokenId(tokenId)) {
+    renderKnownTokenOwner(tokenId);
+  }
 }
 
 function handleRendererMessage(event) {
@@ -350,16 +452,17 @@ function renderSampleGrid() {
   }
 
   const samples = state.sortMode === "collector"
-    ? []
+    ? [...state.collectorTokens].sort((a, b) => Number(b.id) - Number(a.id))
     : [...state.samples].sort((a, b) => {
-      return state.sortMode === "token" ? Number(a.id) - Number(b.id) : Number(b.id) - Number(a.id);
+      if (state.sortMode === "token") return Number(a.id) - Number(b.id);
+      return Number(b.addedAt || 0) - Number(a.addedAt || 0) || Number(b.id) - Number(a.id);
     });
 
   if (state.sortMode === "collector" && !samples.length) {
     els.mintedGrid.innerHTML = "";
     const empty = document.createElement("p");
     empty.className = "empty-grid";
-    empty.textContent = state.account ? "No mints found for this wallet yet." : "Connect wallet to view your mints.";
+    empty.textContent = collectorEmptyMessage();
     els.mintedGrid.append(empty);
     return;
   }
@@ -382,10 +485,22 @@ function renderSampleGrid() {
       image.loading = "lazy";
       image.decoding = "async";
       frameWrap.append(image);
+    } else if (sample.hash && !sample.thumbnailPending) {
+      const preview = document.createElement("iframe");
+      preview.srcdoc = buildHtml({
+        hash: sample.hash,
+        tokenId: sample.id,
+        contractAddress: config.tokenAddress || "",
+        chainId: config.chainId ? String(Number.parseInt(config.chainId, 16)) : "",
+        minter: sample.minter || sample.owner || "",
+      });
+      preview.title = sample.name;
+      preview.loading = "lazy";
+      frameWrap.append(preview);
     } else {
       const pending = document.createElement("span");
       pending.className = "pending-thumb";
-      pending.textContent = "pending thumbnail";
+      pending.textContent = sample.revealed === false ? "pending reveal" : "pending thumbnail";
       frameWrap.append(pending);
     }
 
@@ -394,9 +509,13 @@ function renderSampleGrid() {
 
     label.append(id);
     button.append(frameWrap, label);
-    if (sample.hash) {
+    if (sample.hash && sample.revealed !== false) {
       button.addEventListener("click", () => {
-        renderHash(sample.hash, sample.id);
+        selectToken(sample);
+      });
+    } else if (sample.revealed === false) {
+      button.addEventListener("click", () => {
+        revealPendingToken(sample);
       });
     }
     fragment.append(button);
@@ -405,15 +524,483 @@ function renderSampleGrid() {
   els.mintedGrid.replaceChildren(fragment);
 }
 
+function selectToken(sample) {
+  renderHash(sample.hash, sample.id, { owner: sample.owner, minter: sample.minter });
+  els.previewShell.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function revealPendingToken(sample) {
+  if (!window.ethereum || !config.tokenAddress) return;
+  if (!state.account) {
+    alert("Connect wallet to reveal this token.");
+    return;
+  }
+
+  state.minting = true;
+  updateWalletUi();
+  openMintModal({
+    title: "Reveal",
+    status: "Preparing reveal.",
+    tokenId: sample.id,
+    owner: sample.owner || state.account,
+  });
+
+  try {
+    await ensureConfiguredChain();
+    await revealTokenIntoModal(sample.id, sample);
+  } catch (error) {
+    console.warn("Reveal failed", error);
+    updateMintModal({
+      title: "Cancelled",
+      status: readableWalletError(error),
+    });
+  } finally {
+    state.minting = false;
+    updateWalletUi();
+  }
+}
+
+async function revealTokenIntoModal(tokenId, pendingToken) {
+  await waitForRevealWindow(tokenId);
+  updateMintModal({
+    title: "Reveal",
+    status: "Reveal ready. Waiting for wallet confirmation.",
+    tokenId,
+  });
+
+  const revealTxHash = await sendRunnerTransaction("reveal", [tokenId]);
+  updateMintModal({
+    status: "Reveal submitted. Waiting for confirmation.",
+    txHash: revealTxHash,
+  });
+  await waitForTransactionReceipt(revealTxHash);
+
+  const tokenData = await loadTokenOnChainData(tokenId);
+  if (!tokenData.revealed || isZeroHash(tokenData.hash)) {
+    throw new Error("Reveal confirmed, but the stored seed is not available yet.");
+  }
+
+  const ownerLabel = await displayNameForAddress(tokenData.owner || state.account);
+  updateMintModal({
+    title: "Complete",
+    status: "Iteration revealed.",
+    tokenId,
+    owner: ownerLabel,
+    hash: tokenData.hash,
+    html: buildHtml({
+      hash: tokenData.hash,
+      tokenId,
+      contractAddress: config.tokenAddress || "",
+      chainId: config.chainId ? String(Number.parseInt(config.chainId, 16)) : "",
+      minter: tokenData.minter || tokenData.owner || "",
+    }),
+  });
+
+  const revealedToken = {
+    ...pendingToken,
+    id: tokenId,
+    name: `Runners Standing Still #${tokenId}`,
+    image: "",
+    hash: tokenData.hash,
+    owner: tokenData.owner,
+    minter: tokenData.minter,
+    revealed: true,
+    thumbnailPending: true,
+  };
+  replaceMintedToken(revealedToken);
+  updateMintedTokenThumbnail(revealedToken);
+  return revealedToken;
+}
+
+async function ensureCollectorTokens() {
+  if (!state.account || !config.tokenAddress || !config.rpcUrl) return;
+
+  const scanKey = `${checksumlessAddress(state.account)}:${state.totalSupply}`;
+  if (state.collectorScanKey === scanKey || state.collectorScanning) return;
+
+  state.collectorScanning = true;
+  state.collectorTokens = [];
+  state.collectorScanKey = "";
+  renderSampleGrid();
+
+  try {
+    await refreshTotalSupply();
+    const currentScanKey = `${checksumlessAddress(state.account)}:${state.totalSupply}`;
+    const tokenIds = Array.from({ length: state.totalSupply }, (_, index) => String(index + 1));
+    const ownedIds = [];
+
+    await mapWithConcurrency(tokenIds, 10, async (tokenId) => {
+      try {
+        const owner = await readRunner("ownerOf", tokenId);
+        if (checksumlessAddress(owner) === checksumlessAddress(state.account)) {
+          ownedIds.push(tokenId);
+        }
+      } catch {}
+    });
+
+    const ownedTokens = [];
+    await mapWithConcurrency(ownedIds, 6, async (tokenId) => {
+      try {
+        const tokenData = await loadTokenOnChainData(tokenId);
+        ownedTokens.push({
+          id: tokenId,
+          name: `Runners Standing Still #${tokenId}`,
+          image: "",
+          hash: tokenData.revealed ? tokenData.hash : "",
+          owner: tokenData.owner,
+          minter: tokenData.minter,
+          revealed: tokenData.revealed,
+          addedAt: Date.now(),
+        });
+      } catch {}
+    });
+
+    state.collectorTokens = ownedTokens.sort((a, b) => Number(b.id) - Number(a.id));
+    state.collectorScanKey = currentScanKey;
+  } finally {
+    state.collectorScanning = false;
+    if (state.sortMode === "collector") renderSampleGrid();
+  }
+}
+
+function resetCollectorScan() {
+  state.collectorTokens = [];
+  state.collectorScanKey = "";
+  state.collectorScanning = false;
+}
+
+function rememberCollectorToken(token) {
+  if (checksumlessAddress(token.owner) !== checksumlessAddress(state.account)) return;
+
+  state.collectorTokens = [
+    token,
+    ...state.collectorTokens.filter((existing) => String(existing.id) !== String(token.id)),
+  ];
+  state.collectorScanKey = `${checksumlessAddress(state.account)}:${state.totalSupply}`;
+  if (state.sortMode === "collector") renderSampleGrid();
+}
+
+function rememberMintedToken(token) {
+  state.samples = [
+    token,
+    ...state.samples.filter((existing) => String(existing.id) !== String(token.id)),
+  ];
+  rememberCollectorToken(token);
+  if (state.sortMode !== "collector") renderSampleGrid();
+}
+
+async function updateMintedTokenThumbnail(token) {
+  try {
+    const image = await captureFrameThumbnail(els.mintModalPreview);
+    replaceMintedToken({ ...token, image, thumbnailPending: false });
+  } catch (error) {
+    console.warn("Unable to capture mint thumbnail", error);
+    replaceMintedToken({ ...token, thumbnailPending: false });
+  }
+}
+
+function replaceMintedToken(token) {
+  state.samples = state.samples.map((sample) => (
+    String(sample.id) === String(token.id) ? token : sample
+  ));
+  state.collectorTokens = state.collectorTokens.map((sample) => (
+    String(sample.id) === String(token.id) ? token : sample
+  ));
+  renderSampleGrid();
+}
+
+async function captureFrameThumbnail(frame) {
+  await waitForFrameCompletion(frame);
+  const canvas = frame.contentDocument?.querySelector("canvas");
+  if (!canvas) throw new Error("No canvas found for thumbnail capture.");
+  return canvas.toDataURL("image/png");
+}
+
+async function waitForFrameCompletion(frame) {
+  for (let attempt = 0; attempt < 900; attempt += 1) {
+    if (frame.contentWindow?.__textureMelt?.completed === true) return;
+    await delay(100);
+  }
+  throw new Error("Timed out waiting for thumbnail render.");
+}
+
+function collectorEmptyMessage() {
+  if (!state.account) return "Connect wallet to view your mints.";
+  if (state.collectorScanning) return "Checking tokens...";
+  return "No mints found for this wallet yet.";
+}
+
 function buildHtml(input) {
   const renderInputJson = JSON.stringify(input);
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Runners Standing Still Preview</title><style>html,body{width:100%;height:100%;margin:0;background:#f5f5f2}body{display:grid;place-items:center;overflow:hidden}canvas{display:block;max-width:100vw;max-height:100vh}</style></head><body><canvas></canvas><script>window.renderInput=${renderInputJson};window.tokenData=window.renderInput;function notifyParent(type,event){parent.postMessage({project:"runners-standing-still",type,features:window.$features||{},liveState:event?.detail?.liveState||window.__textureMelt?.liveState||null},"*")}window.addEventListener("runners-standing-still:initialized",event=>notifyParent("initialized",event));window.addEventListener("runners-standing-still:complete",event=>notifyParent("complete",event));window.addEventListener("runners-standing-still:live-block",event=>notifyParent("live-block",event));</script><script>${state.rendererScript}</script></body></html>`;
 }
 
 function versionedAssetUrl(url, version) {
+  if (url.startsWith("data:")) return url;
   if (!version) return url;
   const separator = url.includes("?") ? "&" : "?";
   return `${url}${separator}v=${encodeURIComponent(version)}`;
+}
+
+function openMintModal({ title = "Minting", status = "", txHash = "", tokenId = "", owner = "", hash = "" } = {}) {
+  resetMintModal();
+  updateMintModal({ title, status, txHash, tokenId, owner, hash, html: "" });
+  if (!els.mintModal.open) {
+    els.mintModal.showModal();
+  }
+}
+
+function closeMintModal() {
+  els.mintModal.close();
+}
+
+function updateMintModal({ title, status, txHash, tokenId, owner, hash, html } = {}) {
+  if (title) els.mintModalTitle.textContent = title;
+  if (status) els.mintModalStatus.textContent = status;
+  if (txHash) els.mintModalTx.textContent = shortHash(txHash);
+  if (tokenId) els.mintModalToken.textContent = `#${tokenId}`;
+  if (owner) els.mintModalOwner.textContent = owner.startsWith("0x") ? shortAddress(owner) : owner;
+  if (hash) els.mintModalHash.textContent = hash;
+  if (html !== undefined) {
+    if (html) {
+      els.mintModalPreview.srcdoc = html;
+      els.mintModalPreviewWrap.hidden = false;
+    } else {
+      els.mintModalPreview.removeAttribute("srcdoc");
+      els.mintModalPreviewWrap.hidden = true;
+    }
+  }
+}
+
+function resetMintModal() {
+  els.mintModalTitle.textContent = "Minting";
+  els.mintModalStatus.textContent = "Waiting for wallet confirmation.";
+  els.mintModalTx.textContent = "pending";
+  els.mintModalToken.textContent = "pending";
+  els.mintModalOwner.textContent = "pending";
+  els.mintModalHash.textContent = "pending";
+  els.mintModalPreview.removeAttribute("srcdoc");
+  els.mintModalPreviewWrap.hidden = true;
+}
+
+async function renderKnownTokenOwner(tokenId) {
+  try {
+    const { owner } = await loadTokenOnChainData(tokenId, { seed: false, minter: false });
+    if (String(tokenId) !== activeTokenId()) return;
+    renderOwnerLine(await displayNameForAddress(owner));
+  } catch {
+    if (String(tokenId) !== activeTokenId()) return;
+    renderOwnerLine("");
+  }
+}
+
+function renderOwnerLine(ownerLabel) {
+  if (!ownerLabel) {
+    els.tokenOwner.hidden = true;
+    els.tokenOwnerValue.textContent = "";
+    return;
+  }
+  els.tokenOwner.hidden = false;
+  els.tokenOwnerValue.textContent = ownerLabel;
+}
+
+function activeTokenId() {
+  return state.activeTokenId;
+}
+
+async function loadTokenOnChainData(tokenId, options = {}) {
+  const { owner = true, seed = true, minter = true, revealed = true, mintBlock = false } = options;
+  const [ownerAddress, seedHash, minterAddress, revealedStatus, mintedAtBlock] = await Promise.all([
+    owner ? readRunner("ownerOf", tokenId) : Promise.resolve(""),
+    seed ? readRunner("tokenSeed", tokenId) : Promise.resolve(""),
+    minter ? readRunner("tokenMinter", tokenId) : Promise.resolve(""),
+    revealed ? readRunner("tokenRevealed", tokenId) : Promise.resolve(false),
+    mintBlock ? readRunner("mintBlock", tokenId) : Promise.resolve(0n),
+  ]);
+  return {
+    owner: ownerAddress,
+    hash: seedHash,
+    minter: minterAddress,
+    revealed: Boolean(revealedStatus) && !isZeroHash(seedHash),
+    mintBlock: mintedAtBlock,
+  };
+}
+
+async function sendRunnerTransaction(method, args = [], options = {}) {
+  const spec = runnerContract.writes[method];
+  if (!spec) throw new Error(`Unknown RUNNER write: ${method}`);
+  return window.ethereum.request({
+    method: "eth_sendTransaction",
+    params: [{
+      from: state.account,
+      to: config.tokenAddress,
+      value: options.value || "0x0",
+      data: `${spec.selector}${encodeArgs(spec.args || [], args)}`,
+    }],
+  });
+}
+
+async function readRunner(method, ...args) {
+  const spec = runnerContract.reads[method];
+  if (!spec) throw new Error(`Unknown RUNNER read: ${method}`);
+  const result = await ethCall(`${spec.selector}${encodeArgs(spec.args || [], args)}`);
+  return decodeContractValue(result, spec.returns);
+}
+
+async function ethCall(data) {
+  if (!config.tokenAddress || !config.rpcUrl) throw new Error("Missing contract configuration.");
+  const response = await fetch(config.rpcUrl, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: Date.now(),
+      method: "eth_call",
+      params: [{ to: config.tokenAddress, data }, "latest"],
+    }),
+  });
+  const payload = await response.json();
+  if (payload.error) throw new Error(payload.error.message || "Contract read failed.");
+  return payload.result;
+}
+
+async function waitForRevealWindow(tokenId) {
+  const mintBlock = await readRunner("mintBlock", tokenId);
+  const revealBlock = mintBlock + 2n;
+
+  for (let attempt = 0; attempt < 150; attempt += 1) {
+    const currentBlock = await readBlockNumber();
+    if (currentBlock >= revealBlock) return;
+
+    updateMintModal({
+      status: `Mint confirmed. Waiting for reveal block ${revealBlock.toString()} (current ${currentBlock.toString()}).`,
+    });
+    await delay(2500);
+  }
+
+  throw new Error(`Reveal block ${revealBlock.toString()} was not reached in time.`);
+}
+
+async function readBlockNumber() {
+  if (!config.rpcUrl) throw new Error("Missing RPC configuration.");
+  const response = await fetch(config.rpcUrl, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: Date.now(),
+      method: "eth_blockNumber",
+      params: [],
+    }),
+  });
+  const payload = await response.json();
+  if (payload.error) throw new Error(payload.error.message || "Unable to read block number.");
+  return BigInt(payload.result);
+}
+
+async function waitForTransactionReceipt(txHash) {
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const receipt = await window.ethereum.request({
+      method: "eth_getTransactionReceipt",
+      params: [txHash],
+    });
+    if (receipt) return receipt;
+    await delay(1000);
+  }
+  throw new Error("Timed out waiting for transaction confirmation.");
+}
+
+function tokenIdFromTransferReceipt(receipt) {
+  const contractAddress = checksumlessAddress(config.tokenAddress || "");
+  const log = receipt?.logs?.find((entry) => (
+    checksumlessAddress(entry.address) === contractAddress
+    && entry.topics?.[0]?.toLowerCase() === runnerContract.events.transfer
+    && entry.topics?.[3]
+  ));
+  return log ? String(BigInt(log.topics[3])) : "";
+}
+
+async function displayNameForAddress(address) {
+  if (!address) return "";
+  const short = shortAddress(address);
+  const name = await resolveEnsName(address);
+  return name || short;
+}
+
+async function resolveEnsName(address) {
+  if (!address || config.chainId !== "0x1") return "";
+  if (typeof config.resolveName === "function") {
+    try {
+      return await config.resolveName(address);
+    } catch {}
+  }
+  if (config.ensLookupUrl) {
+    try {
+      const response = await fetch(`${config.ensLookupUrl}${encodeURIComponent(address)}`, { cache: "no-store" });
+      if (!response.ok) return "";
+      const payload = await response.json();
+      return payload.name || payload.ens || "";
+    } catch {}
+  }
+  return "";
+}
+
+function uint256Hex(value) {
+  return BigInt(value).toString(16).padStart(64, "0");
+}
+
+function encodeArgs(types, values) {
+  if (types.length !== values.length) throw new Error("Contract argument length mismatch.");
+  return types.map((type, index) => {
+    if (type === "uint256") return uint256Hex(values[index]);
+    throw new Error(`Unsupported contract argument type: ${type}`);
+  }).join("");
+}
+
+function decodeContractValue(result, type) {
+  if (!result || result === "0x") return type === "bool" ? false : "";
+  if (type === "uint256") return BigInt(result);
+  if (type === "bool") return BigInt(result) !== 0n;
+  if (type === "address") return checksumlessAddress(`0x${result.slice(-40)}`);
+  if (type === "bytes32") return result;
+  throw new Error(`Unsupported contract return type: ${type}`);
+}
+
+function checksumlessAddress(address) {
+  return String(address || "").toLowerCase();
+}
+
+function isConcreteTokenId(tokenId) {
+  return /^\d+$/.test(String(tokenId)) && BigInt(tokenId) > 0n;
+}
+
+function isZeroHash(hash) {
+  return !hash || /^0x0{64}$/i.test(hash);
+}
+
+function readableWalletError(error) {
+  if (error?.code === 4001) return "Transaction cancelled in wallet.";
+  return error?.message || "Transaction failed.";
+}
+
+function shortHash(hash) {
+  return `${hash.slice(0, 10)}...${hash.slice(-8)}`;
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function mapWithConcurrency(items, concurrency, callback) {
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (nextIndex < items.length) {
+      const item = items[nextIndex];
+      nextIndex += 1;
+      await callback(item);
+    }
+  });
+  await Promise.all(workers);
 }
 
 function randomHash() {

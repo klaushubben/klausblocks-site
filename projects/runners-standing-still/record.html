@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Runners Standing Still Recorder</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --paper: #050505;
+        --ink: #f7f7f2;
+        --muted: rgba(247, 247, 242, 0.62);
+        --line: rgba(247, 247, 242, 0.24);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font: 12px/1.35 Arial, Helvetica, sans-serif;
+        overflow: hidden;
+      }
+
+      body {
+        position: fixed;
+        inset: 0;
+      }
+
+      canvas {
+        display: block;
+      }
+
+      body[data-view="screen"] canvas {
+        width: 100vw !important;
+        height: 100vh !important;
+        max-width: none !important;
+        max-height: none !important;
+        object-fit: fill !important;
+      }
+
+      body[data-view="object"] {
+        display: grid;
+        place-items: center;
+      }
+
+      body[data-view="object"] canvas {
+        width: 100vw !important;
+        height: auto !important;
+        max-width: 100vw !important;
+        max-height: 100vh !important;
+        object-fit: contain !important;
+      }
+
+      .recorder-panel {
+        position: fixed;
+        top: 1rem;
+        left: 1rem;
+        z-index: 5;
+        width: min(34rem, calc(100vw - 2rem));
+        display: grid;
+        gap: 0.75rem;
+        padding: 0.85rem;
+        border: 1px solid var(--line);
+        background: rgba(5, 5, 5, 0.72);
+        backdrop-filter: blur(8px);
+      }
+
+      .recorder-title,
+      .recorder-status {
+        margin: 0;
+      }
+
+      .recorder-title {
+        font-size: 0.92rem;
+        font-weight: 700;
+      }
+
+      .recorder-status {
+        color: var(--muted);
+      }
+
+      .recorder-grid {
+        display: grid;
+        grid-template-columns: 1fr 6rem 8rem 4.5rem 5rem;
+        gap: 0.5rem;
+      }
+
+      label {
+        display: grid;
+        gap: 0.25rem;
+        color: var(--muted);
+      }
+
+      input,
+      select,
+      button,
+      a {
+        min-width: 0;
+        min-height: 2.1rem;
+        border: 1px solid var(--line);
+        border-radius: 0;
+        color: var(--ink);
+        background: transparent;
+        font: inherit;
+      }
+
+      input,
+      select {
+        width: 100%;
+        padding: 0 0.5rem;
+      }
+
+      button,
+      a {
+        display: inline-grid;
+        place-items: center;
+        padding: 0 0.75rem;
+        cursor: pointer;
+        text-decoration: none;
+      }
+
+      button:hover:not(:disabled),
+      button:focus-visible:not(:disabled),
+      a:hover,
+      a:focus-visible {
+        border-color: var(--ink);
+        outline: 0;
+      }
+
+      button:disabled,
+      a[aria-disabled="true"] {
+        cursor: not-allowed;
+        opacity: 0.42;
+      }
+
+      .recorder-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+
+      .recorder-meta {
+        position: fixed;
+        left: 1rem;
+        bottom: 1rem;
+        z-index: 4;
+        max-width: min(56rem, calc(100vw - 2rem));
+        color: var(--muted);
+        pointer-events: none;
+      }
+
+      @media (max-width: 760px) {
+        .recorder-grid {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <canvas></canvas>
+    <form class="recorder-panel" data-recorder-panel>
+      <p class="recorder-title">Runners Standing Still Recorder</p>
+      <div class="recorder-grid">
+        <label>
+          hash
+          <input name="hash" data-hash-input spellcheck="false" />
+        </label>
+        <label>
+          view
+          <select name="view" data-view-select>
+            <option value="screen">screen</option>
+            <option value="object">object</option>
+          </select>
+        </label>
+        <label>
+          record mode
+          <select name="mode" data-mode-select>
+            <option value="after-complete">after complete</option>
+            <option value="from-start">from start</option>
+            <option value="manual">manual</option>
+          </select>
+        </label>
+        <label>
+          seconds
+          <input name="seconds" data-seconds-input type="number" min="1" max="120" step="1" value="12" />
+        </label>
+        <label>
+          fps
+          <input name="fps" data-fps-input type="number" min="1" max="60" step="1" value="30" />
+        </label>
+      </div>
+      <div class="recorder-actions">
+        <button type="button" data-new-hash>new hash</button>
+        <button type="button" data-redraw>redraw</button>
+        <button type="button" data-record disabled>record</button>
+        <a data-download aria-disabled="true">download</a>
+      </div>
+      <p class="recorder-status" data-status>loading renderer...</p>
+    </form>
+    <div class="recorder-meta" data-meta></div>
+    <script>
+      const BASE_WIDTH = 4032;
+      const BASE_HEIGHT = 2352;
+      const params = new URLSearchParams(window.location.search);
+      const hashInput = document.querySelector("[data-hash-input]");
+      const viewSelect = document.querySelector("[data-view-select]");
+      const modeSelect = document.querySelector("[data-mode-select]");
+      const secondsInput = document.querySelector("[data-seconds-input]");
+      const fpsInput = document.querySelector("[data-fps-input]");
+      const recordButton = document.querySelector("[data-record]");
+      const downloadLink = document.querySelector("[data-download]");
+      const statusEl = document.querySelector("[data-status]");
+      const metaEl = document.querySelector("[data-meta]");
+      const canvas = document.querySelector("canvas");
+      let currentHash = readHashFromUrl() || randomHash();
+      let currentView = params.get("view") === "object" ? "object" : "screen";
+      let currentRecorder = null;
+      let chunks = [];
+
+      hashInput.value = currentHash;
+      viewSelect.value = currentView;
+      modeSelect.value = ["after-complete", "from-start", "manual"].includes(params.get("mode"))
+        ? params.get("mode")
+        : "after-complete";
+      secondsInput.value = clampNumber(params.get("seconds"), 12, 1, 120);
+      fpsInput.value = clampNumber(params.get("fps"), 30, 1, 60);
+
+      function readHashFromUrl() {
+        const hash = params.get("hash");
+        return /^0x[0-9a-fA-F]{64}$/.test(hash || "") ? hash : "";
+      }
+
+      function randomHash() {
+        const bytes = new Uint8Array(32);
+        crypto.getRandomValues(bytes);
+        return `0x${Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+      }
+
+      function clampNumber(value, fallback, min, max) {
+        const number = Number(value ?? fallback);
+        return Math.max(min, Math.min(max, Number.isFinite(number) ? number : fallback));
+      }
+
+      function viewportSize() {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        return {
+          width: Math.max(1, Math.round(window.innerWidth * dpr)),
+          height: Math.max(1, Math.round(window.innerHeight * dpr)),
+          dpr,
+        };
+      }
+
+      function patchRenderer(script, width, height, view) {
+        if (view === "object") return script;
+
+        const noiseScaleX = BASE_WIDTH / width;
+        const noiseScaleY = BASE_HEIGHT / height;
+
+        return script
+          .replace(
+            /width:4032,height:2352,imageWidth:3840,imageHeight:2160,matte:96,matteColor:"#ffffff",textureWidth:3840,textureHeight:2160/,
+            `width:${width},height:${height},imageWidth:${width},imageHeight:${height},matte:0,matteColor:"#000000",textureWidth:${width},textureHeight:${height}`,
+          )
+          .replace(
+            /noiseStepX:e\.random_num\(28e-5,7e-4\),noiseStepY:N,/,
+            `noiseStepX:e.random_num(28e-5,7e-4)*${noiseScaleX},noiseStepY:N*${noiseScaleY},`,
+          )
+          .replace(
+            /canvas\.style\.width="100vw",canvas\.style\.height="auto",canvas\.style\.maxHeight="100vh",canvas\.style\.objectFit="contain"/,
+            `canvas.style.width="100vw",canvas.style.height="100vh",canvas.style.maxHeight="none",canvas.style.objectFit="fill"`,
+          );
+      }
+
+      function updateUrl() {
+        const next = new URL(window.location.href);
+        next.searchParams.set("hash", currentHash);
+        next.searchParams.set("view", currentView);
+        next.searchParams.set("mode", modeSelect.value);
+        next.searchParams.set("seconds", secondsInput.value);
+        next.searchParams.set("fps", fpsInput.value);
+        next.searchParams.delete("autostart");
+        history.replaceState(null, "", next);
+      }
+
+      function reloadForAutostart() {
+        const next = new URL(window.location.href);
+        next.searchParams.set("hash", validHash(hashInput.value) ? hashInput.value : randomHash());
+        next.searchParams.set("view", viewSelect.value);
+        next.searchParams.set("mode", "from-start");
+        next.searchParams.set("seconds", secondsInput.value);
+        next.searchParams.set("fps", fpsInput.value);
+        next.searchParams.set("autostart", "1");
+        next.searchParams.set("redraw", String(Date.now()));
+        window.location.replace(next);
+      }
+
+      async function render({ waitForComplete = modeSelect.value === "after-complete" } = {}) {
+        recordButton.disabled = true;
+        downloadLink.removeAttribute("href");
+        downloadLink.removeAttribute("download");
+        downloadLink.setAttribute("aria-disabled", "true");
+        statusEl.textContent = "loading renderer...";
+        currentHash = validHash(hashInput.value) ? hashInput.value : randomHash();
+        currentView = viewSelect.value === "object" ? "object" : "screen";
+        hashInput.value = currentHash;
+        document.body.dataset.view = currentView;
+        updateUrl();
+
+        window.renderInput = { hash: currentHash, tokenId: "record", contractAddress: "", chainId: "", minter: "" };
+        window.tokenData = window.renderInput;
+        window.__textureMelt = null;
+
+        const previousScripts = document.querySelectorAll("script[data-renderer-script]");
+        previousScripts.forEach((script) => script.remove());
+        const { width, height, dpr } = viewportSize();
+        metaEl.textContent = `${currentHash} | ${currentView} | ${width}x${height} @ ${dpr}x`;
+
+        const response = await fetch("./sketch.runners-standing-still.min.js", { cache: "no-store" });
+        if (!response.ok) throw new Error("Renderer script failed to load.");
+
+        const script = document.createElement("script");
+        script.dataset.rendererScript = "true";
+        script.textContent = patchRenderer(await response.text(), width, height, currentView);
+        document.body.append(script);
+
+        if (waitForComplete) {
+          statusEl.textContent = "drawing deterministic frame...";
+          await waitForCompletion();
+          statusEl.textContent = "ready to record";
+        } else {
+          statusEl.textContent = modeSelect.value === "from-start"
+            ? "redrawn; recording can start from the first pass"
+            : "drawing; ready for manual recording";
+        }
+
+        recordButton.disabled = false;
+      }
+
+      function validHash(hash) {
+        return /^0x[0-9a-fA-F]{64}$/.test(hash || "");
+      }
+
+      async function waitForCompletion() {
+        for (let attempt = 0; attempt < 900; attempt += 1) {
+          if (window.__textureMelt?.completed === true) return;
+          await delay(100);
+        }
+        throw new Error("Timed out waiting for deterministic render.");
+      }
+
+      function supportedMimeType() {
+        const options = [
+          "video/mp4;codecs=avc1.42E01E",
+          "video/mp4",
+          "video/webm;codecs=vp9",
+          "video/webm;codecs=vp8",
+          "video/webm",
+        ];
+        return options.find((type) => MediaRecorder.isTypeSupported(type)) || "";
+      }
+
+      function recordingFormat(mimeType) {
+        return mimeType.startsWith("video/mp4")
+          ? { type: mimeType, extension: "mp4", label: "mp4" }
+          : { type: mimeType || "video/webm", extension: "webm", label: "webm" };
+      }
+
+      async function startRecording() {
+        if (currentRecorder?.state === "recording") return;
+        const seconds = clampNumber(secondsInput.value, 12, 1, 120);
+        const fps = clampNumber(fpsInput.value, 30, 1, 60);
+        const stream = canvas.captureStream(fps);
+        const mimeType = supportedMimeType();
+        const format = recordingFormat(mimeType);
+        chunks = [];
+        currentRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+        currentRecorder.addEventListener("dataavailable", (event) => {
+          if (event.data.size > 0) chunks.push(event.data);
+        });
+        currentRecorder.addEventListener("stop", () => {
+          stream.getTracks().forEach((track) => track.stop());
+          const blob = new Blob(chunks, { type: format.type });
+          const url = URL.createObjectURL(blob);
+          downloadLink.href = url;
+          downloadLink.download = `runners-${currentHash.slice(2, 10)}-${seconds}s.${format.extension}`;
+          downloadLink.removeAttribute("aria-disabled");
+          statusEl.textContent = `recorded ${seconds}s ${format.label}`;
+          recordButton.disabled = false;
+        });
+        recordButton.disabled = true;
+        statusEl.textContent = `recording ${seconds}s...`;
+        currentRecorder.start();
+        await delay(seconds * 1000);
+        currentRecorder.stop();
+      }
+
+      async function record() {
+        if (modeSelect.value === "from-start") {
+          reloadForAutostart();
+          return;
+        }
+        await startRecording();
+      }
+
+      function delay(ms) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+      }
+
+      document.querySelector("[data-new-hash]").addEventListener("click", () => {
+        hashInput.value = randomHash();
+        render().catch(showError);
+      });
+
+      document.querySelector("[data-redraw]").addEventListener("click", () => {
+        render().catch(showError);
+      });
+
+      recordButton.addEventListener("click", () => {
+        record().catch(showError);
+      });
+
+      [hashInput, viewSelect, modeSelect, secondsInput, fpsInput].forEach((input) => {
+        input.addEventListener("change", () => {
+          render().catch(showError);
+        });
+      });
+
+      function showError(error) {
+        statusEl.textContent = error.message;
+        console.error(error);
+      }
+
+      render().then(() => {
+        if (params.get("autostart") === "1") {
+          startRecording().catch(showError);
+        }
+      }).catch(showError);
+    </script>
+  </body>
+</html>

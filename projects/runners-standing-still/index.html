@@ -8,7 +8,7 @@
     <meta name="description" content="Runners Standing Still by klaus, a self-hosted Ethereum generative art mint rehearsal." />
     <link rel="stylesheet" href="./style.css" />
     <script src="./runner-config.local.js"></script>
-    <script src="./mint.js?v=20260616-render-cache" defer></script>
+    <script src="./mint.js?v=20260628-reveal-flow" defer></script>
   </head>
   <body>
     <main class="runner-page">
@@ -38,6 +38,7 @@
             <section class="trait-panel" aria-label="Preview traits">
               <div class="trait-panel-top">
                 <p class="trait-heading"><span>traits for</span> <span data-preview-hash>waiting</span></p>
+                <p class="owner-line" data-token-owner hidden><span>owned by</span> <span data-token-owner-value></span></p>
                 <button class="quiet-button fullscreen-button" type="button" data-fullscreen-open>Full screen</button>
               </div>
               <div class="trait-groups">
@@ -145,5 +146,43 @@
     <div class="preview-overlay" data-preview-overlay hidden>
       <button class="quiet-button fullscreen-close" type="button" data-fullscreen-close>close</button>
     </div>
+    <dialog class="mint-modal" data-mint-modal>
+      <div class="mint-modal-shell">
+        <div class="mint-modal-header">
+          <div>
+            <p class="eyebrow" data-mint-modal-kicker>mint status</p>
+            <h2 data-mint-modal-title>Minting</h2>
+          </div>
+          <button class="quiet-button modal-close" type="button" data-mint-modal-close>close</button>
+        </div>
+        <div class="mint-modal-body">
+          <div class="modal-preview-wrap" data-mint-modal-preview-wrap hidden>
+            <iframe class="modal-preview" data-mint-modal-preview title="Minted Runners Standing Still token" frameborder="0"></iframe>
+          </div>
+          <div class="mint-progress">
+            <span class="mint-progress-mark" aria-hidden="true"></span>
+            <p data-mint-modal-status>Waiting for wallet confirmation.</p>
+          </div>
+          <dl class="mint-modal-details">
+            <div>
+              <dt>transaction</dt>
+              <dd data-mint-modal-tx>pending</dd>
+            </div>
+            <div>
+              <dt>token</dt>
+              <dd data-mint-modal-token>pending</dd>
+            </div>
+            <div>
+              <dt>owner</dt>
+              <dd data-mint-modal-owner>pending</dd>
+            </div>
+            <div>
+              <dt>hash</dt>
+              <dd data-mint-modal-hash>pending</dd>
+            </div>
+          </dl>
+        </div>
+      </div>
+    </dialog>
   </body>
 </html>
