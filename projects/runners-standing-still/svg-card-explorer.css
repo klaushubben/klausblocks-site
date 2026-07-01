@@ -1,0 +1,158 @@
+:root {
+  color-scheme: dark;
+  --paper: #050505;
+  --ink: #f7f7f2;
+  --muted: rgba(247, 247, 242, 0.58);
+  --line: rgba(247, 247, 242, 0.2);
+  --panel: rgba(247, 247, 242, 0.055);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 13px/1.35 Arial, Helvetica, sans-serif;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+.explorer {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) min(23rem, 36vw);
+  gap: clamp(1rem, 3vw, 2rem);
+  padding: clamp(1rem, 3vw, 2rem);
+}
+
+.stage {
+  min-width: 0;
+  display: grid;
+  place-items: center;
+}
+
+.card-wrap {
+  width: min(100%, calc((100vh - clamp(2rem, 6vw, 4rem)) * 1));
+  max-width: 920px;
+  aspect-ratio: 1;
+}
+
+.card-wrap svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: #050505;
+}
+
+.controls {
+  align-self: start;
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.controls header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+label,
+fieldset {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+fieldset {
+  border: 0;
+  padding: 0.25rem 0 0;
+}
+
+fieldset label {
+  grid-template-columns: auto 1fr;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+label span,
+.readout dt {
+  color: var(--muted);
+}
+
+input,
+select,
+button {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  color: var(--ink);
+  background: transparent;
+}
+
+input,
+select {
+  width: 100%;
+  padding: 0.55rem 0.6rem;
+}
+
+button {
+  padding: 0.55rem 0.75rem;
+  cursor: pointer;
+}
+
+button:hover,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 1px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+.readout {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.25rem 0.7rem;
+  margin: 0.3rem 0 0;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--line);
+}
+
+.readout dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 860px) {
+  .explorer {
+    grid-template-columns: 1fr;
+  }
+
+  .controls {
+    order: -1;
+  }
+}

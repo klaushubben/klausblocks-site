@@ -7,7 +7,7 @@ Website-facing project files for `Runners Standing Still`.
 - `index.html` - project/mint page.
 - `style.css` - project page styles.
 - `mint.js` - preview, wallet, and mint UI logic.
-- `screen-viewer.html` - display/kiosk viewer with `view=screen` and `view=object`.
+- `screen-viewer.html` - display/kiosk viewer with `view=screen` and `view=frame`.
 - `thumbs/` and `mint-thumbnails.json` - sample iteration thumbnails.
 
 ## Consumed Artifact
@@ -17,4 +17,3 @@ sketch.runners-standing-still.min.js
 ```
 
 This file is copied in from the Runners/contract artifact flow. Do not hand-edit it in the site folder.
-

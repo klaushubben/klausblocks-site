@@ -31,12 +31,12 @@
         object-fit: fill !important;
       }
 
-      body[data-view="object"] {
+      body[data-view="frame"] {
         display: grid;
         place-items: center;
       }
 
-      body[data-view="object"] canvas {
+      body[data-view="frame"] canvas {
         width: 100vw !important;
         height: auto !important;
         max-width: 100vw !important;
@@ -92,7 +92,7 @@
     <canvas></canvas>
     <div class="viewer-controls">
       <a href="" data-view-link="screen">screen</a>
-      <a href="" data-view-link="object">object</a>
+      <a href="" data-view-link="frame">frame</a>
       <button type="button" data-redraw>redraw</button>
       <button type="button" data-new-hash>new hash</button>
     </div>
@@ -110,7 +110,7 @@
 
       function readViewFromUrl() {
         const view = new URLSearchParams(window.location.search).get("view");
-        return view === "object" ? "object" : "screen";
+        return view === "frame" ? "frame" : "screen";
       }
 
       function navigateWithHash(hash) {
@@ -154,7 +154,7 @@
       }
 
       function patchRenderer(script, width, height, view) {
-        if (view === "object") return script;
+        if (view === "frame") return script;
 
         const noiseScaleX = BASE_WIDTH / width;
         const noiseScaleY = BASE_HEIGHT / height;

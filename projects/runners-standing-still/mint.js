@@ -2,9 +2,10 @@ const config = window.RUNNER_MINT_CONFIG || {};
 
 const state = {
   rendererScript: "",
-  manifestVersion: "",
   sortMode: "recent",
   samples: [],
+  sampleScanKey: "",
+  samplesScanning: false,
   totalSupply: Number(config.initialMintedCount || 0),
   saleActive: false,
   mintPriceWei: config.mintPriceWei || "0",
@@ -25,12 +26,10 @@ const runnerContract = {
     ownerOf: { selector: "0x6352211e", returns: "address", args: ["uint256"] },
     tokenSeed: { selector: "0x5f516836", returns: "bytes32", args: ["uint256"] },
     tokenMinter: { selector: "0x7c57d947", returns: "address", args: ["uint256"] },
-    mintBlock: { selector: "0x5b706838", returns: "uint256", args: ["uint256"] },
-    tokenRevealed: { selector: "0x9d897351", returns: "bool", args: ["uint256"] },
+    tokenURI: { selector: "0xc87b56dd", returns: "string", args: ["uint256"] },
   },
   writes: {
     mint: { selector: "0x1249c58b" },
-    reveal: { selector: "0xc2ca0ac5", args: ["uint256"] },
   },
   events: {
     transfer: "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
@@ -113,10 +112,10 @@ async function init() {
   wireEvents();
   updateWalletUi();
   await loadRendererScript();
-  await loadSampleManifest();
   renderMintedCount();
-  refreshContractState();
+  await refreshContractState();
   renderRandomPreview();
+  await ensureMintedTokens();
   renderSampleGrid();
 }
 
@@ -148,6 +147,8 @@ function wireEvents() {
       renderSampleGrid();
       if (state.sortMode === "collector") {
         await ensureCollectorTokens();
+      } else {
+        await ensureMintedTokens();
       }
     });
   });
@@ -185,24 +186,6 @@ async function loadRendererScript() {
     return;
   }
   state.rendererScript = await response.text();
-}
-
-async function loadSampleManifest() {
-  try {
-    const response = await fetch("./mint-thumbnails.json", { cache: "no-store" });
-    if (!response.ok) return;
-    const manifest = await response.json();
-    state.manifestVersion = manifest.generatedAt || String(Date.now());
-    state.samples = (manifest.thumbnails || []).map((sample, index) => ({
-      id: sample.tokenId || String(index + 1),
-      name: sample.name || `Sample #${index + 1}`,
-      image: sample.image || "",
-      hash: sample.hash || "",
-      addedAt: 0,
-    }));
-  } catch {
-    state.samples = [];
-  }
 }
 
 function renderRandomPreview() {
@@ -264,6 +247,7 @@ async function refreshTotalSupply() {
   try {
     state.totalSupply = Number(await readRunner("totalSupply"));
     renderMintedCount();
+    invalidateTokenScans();
   } catch (error) {
     console.warn("Unable to refresh total supply", error);
   }
@@ -283,6 +267,7 @@ async function refreshContractState() {
     state.mintPriceWei = String(mintPriceWei);
     renderMintedCount();
     updateWalletUi();
+    invalidateTokenScans();
   } catch (error) {
     console.warn("Unable to refresh contract state", error);
   }
@@ -341,26 +326,20 @@ async function mintRandomIteration() {
     const tokenId = tokenIdFromTransferReceipt(receipt);
     updateMintModal({
       title: tokenId ? "Mint confirmed" : "Complete",
-      status: tokenId ? "Mint confirmed. Waiting for reveal block." : "Transaction confirmed.",
+      status: tokenId ? "Mint confirmed. Loading iteration." : "Transaction confirmed.",
       tokenId,
     });
 
     await refreshTotalSupply();
 
     if (tokenId) {
-      const pendingToken = {
+      await completeMintIntoModal(tokenId, {
         id: tokenId,
         name: `Runners Standing Still #${tokenId}`,
-        image: "",
-        hash: "",
         owner: state.account,
         minter: state.account,
-        revealed: false,
         addedAt: Date.now(),
-      };
-      rememberMintedToken(pendingToken);
-
-      await revealTokenIntoModal(tokenId, pendingToken);
+      });
     }
   } catch (error) {
     console.warn("Mint failed", error);
@@ -378,6 +357,7 @@ async function renderHash(hash, tokenId, tokenMeta = {}) {
   els.previewHash.textContent = hash;
   state.activeTokenId = String(tokenId);
   state.activeOwner = tokenMeta.owner || "";
+  const traitsScript = tokenMeta.traitsScript || sharedTraitsScriptFromMetadata(tokenMeta.metadata);
   renderOwnerLine("");
   resetTraits();
   els.previewFrame.srcdoc = buildHtml({
@@ -386,6 +366,7 @@ async function renderHash(hash, tokenId, tokenMeta = {}) {
     contractAddress: config.tokenAddress || "",
     chainId: config.chainId ? String(Number.parseInt(config.chainId, 16)) : "",
     minter: tokenMeta.minter || tokenMeta.owner || "",
+    traitsScript,
   });
 
   if (tokenMeta.owner) {
@@ -442,15 +423,6 @@ function renderSampleGrid() {
     button.classList.toggle("is-active", button.dataset.sort === state.sortMode);
   });
 
-  if (!state.samples.length) {
-    els.mintedGrid.innerHTML = "";
-    const empty = document.createElement("p");
-    empty.className = "empty-grid";
-    empty.textContent = "Sample thumbnails pending.";
-    els.mintedGrid.append(empty);
-    return;
-  }
-
   const samples = state.sortMode === "collector"
     ? [...state.collectorTokens].sort((a, b) => Number(b.id) - Number(a.id))
     : [...state.samples].sort((a, b) => {
@@ -458,11 +430,13 @@ function renderSampleGrid() {
       return Number(b.addedAt || 0) - Number(a.addedAt || 0) || Number(b.id) - Number(a.id);
     });
 
-  if (state.sortMode === "collector" && !samples.length) {
+  if (!samples.length) {
     els.mintedGrid.innerHTML = "";
     const empty = document.createElement("p");
     empty.className = "empty-grid";
-    empty.textContent = collectorEmptyMessage();
+    empty.textContent = state.sortMode === "collector"
+      ? collectorEmptyMessage()
+      : liveMintEmptyMessage();
     els.mintedGrid.append(empty);
     return;
   }
@@ -480,27 +454,15 @@ function renderSampleGrid() {
 
     if (sample.image) {
       const image = document.createElement("img");
-      image.src = versionedAssetUrl(sample.image, state.manifestVersion || sample.hash || sample.id);
+      image.src = versionedAssetUrl(sample.image, sample.thumbnailVersion || sample.hash || sample.id);
       image.alt = sample.name;
       image.loading = "lazy";
       image.decoding = "async";
       frameWrap.append(image);
-    } else if (sample.hash && !sample.thumbnailPending) {
-      const preview = document.createElement("iframe");
-      preview.srcdoc = buildHtml({
-        hash: sample.hash,
-        tokenId: sample.id,
-        contractAddress: config.tokenAddress || "",
-        chainId: config.chainId ? String(Number.parseInt(config.chainId, 16)) : "",
-        minter: sample.minter || sample.owner || "",
-      });
-      preview.title = sample.name;
-      preview.loading = "lazy";
-      frameWrap.append(preview);
     } else {
       const pending = document.createElement("span");
       pending.className = "pending-thumb";
-      pending.textContent = sample.revealed === false ? "pending reveal" : "pending thumbnail";
+      pending.textContent = "pending metadata";
       frameWrap.append(pending);
     }
 
@@ -509,13 +471,9 @@ function renderSampleGrid() {
 
     label.append(id);
     button.append(frameWrap, label);
-    if (sample.hash && sample.revealed !== false) {
+    if (sample.hash) {
       button.addEventListener("click", () => {
         selectToken(sample);
-      });
-    } else if (sample.revealed === false) {
-      button.addEventListener("click", () => {
-        revealPendingToken(sample);
       });
     }
     fragment.append(button);
@@ -525,65 +483,27 @@ function renderSampleGrid() {
 }
 
 function selectToken(sample) {
-  renderHash(sample.hash, sample.id, { owner: sample.owner, minter: sample.minter });
+  renderHash(sample.hash, sample.id, sample);
   els.previewShell.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-async function revealPendingToken(sample) {
-  if (!window.ethereum || !config.tokenAddress) return;
-  if (!state.account) {
-    alert("Connect wallet to reveal this token.");
-    return;
-  }
-
-  state.minting = true;
-  updateWalletUi();
-  openMintModal({
-    title: "Reveal",
-    status: "Preparing reveal.",
-    tokenId: sample.id,
-    owner: sample.owner || state.account,
-  });
-
-  try {
-    await ensureConfiguredChain();
-    await revealTokenIntoModal(sample.id, sample);
-  } catch (error) {
-    console.warn("Reveal failed", error);
-    updateMintModal({
-      title: "Cancelled",
-      status: readableWalletError(error),
-    });
-  } finally {
-    state.minting = false;
-    updateWalletUi();
-  }
-}
-
-async function revealTokenIntoModal(tokenId, pendingToken) {
-  await waitForRevealWindow(tokenId);
+async function completeMintIntoModal(tokenId, pendingToken = {}) {
   updateMintModal({
-    title: "Reveal",
-    status: "Reveal ready. Waiting for wallet confirmation.",
+    title: "Mint confirmed",
+    status: "Loading metadata.",
     tokenId,
   });
 
-  const revealTxHash = await sendRunnerTransaction("reveal", [tokenId]);
-  updateMintModal({
-    status: "Reveal submitted. Waiting for confirmation.",
-    txHash: revealTxHash,
-  });
-  await waitForTransactionReceipt(revealTxHash);
-
   const tokenData = await loadTokenOnChainData(tokenId);
-  if (!tokenData.revealed || isZeroHash(tokenData.hash)) {
-    throw new Error("Reveal confirmed, but the stored seed is not available yet.");
+  const traitsScript = sharedTraitsScriptFromMetadata(tokenData.metadata);
+  if (isZeroHash(tokenData.hash)) {
+    throw new Error("Mint confirmed, but the stored seed is not available yet.");
   }
 
   const ownerLabel = await displayNameForAddress(tokenData.owner || state.account);
   updateMintModal({
     title: "Complete",
-    status: "Iteration revealed.",
+    status: "Iteration loaded.",
     tokenId,
     owner: ownerLabel,
     hash: tokenData.hash,
@@ -593,23 +513,24 @@ async function revealTokenIntoModal(tokenId, pendingToken) {
       contractAddress: config.tokenAddress || "",
       chainId: config.chainId ? String(Number.parseInt(config.chainId, 16)) : "",
       minter: tokenData.minter || tokenData.owner || "",
+      traitsScript,
     }),
   });
 
-  const revealedToken = {
+  const mintedToken = {
     ...pendingToken,
     id: tokenId,
-    name: `Runners Standing Still #${tokenId}`,
-    image: "",
+    name: tokenData.metadata?.name || `Runners Standing Still #${tokenId}`,
+    image: tokenData.metadata?.image || "",
+    metadata: tokenData.metadata,
+    traitsScript,
     hash: tokenData.hash,
     owner: tokenData.owner,
     minter: tokenData.minter,
-    revealed: true,
-    thumbnailPending: true,
+    thumbnailPending: false,
   };
-  replaceMintedToken(revealedToken);
-  updateMintedTokenThumbnail(revealedToken);
-  return revealedToken;
+  replaceMintedToken(mintedToken);
+  return mintedToken;
 }
 
 async function ensureCollectorTokens() {
@@ -644,12 +565,13 @@ async function ensureCollectorTokens() {
         const tokenData = await loadTokenOnChainData(tokenId);
         ownedTokens.push({
           id: tokenId,
-          name: `Runners Standing Still #${tokenId}`,
-          image: "",
-          hash: tokenData.revealed ? tokenData.hash : "",
+          name: tokenData.metadata?.name || `Runners Standing Still #${tokenId}`,
+          image: tokenData.metadata?.image || "",
+          metadata: tokenData.metadata,
+          traitsScript: sharedTraitsScriptFromMetadata(tokenData.metadata),
+          hash: tokenData.hash,
           owner: tokenData.owner,
           minter: tokenData.minter,
-          revealed: tokenData.revealed,
           addedAt: Date.now(),
         });
       } catch {}
@@ -661,6 +583,68 @@ async function ensureCollectorTokens() {
     state.collectorScanning = false;
     if (state.sortMode === "collector") renderSampleGrid();
   }
+}
+
+async function ensureMintedTokens() {
+  if (!config.tokenAddress || !config.rpcUrl) return;
+
+  const scanKey = `${checksumlessAddress(config.tokenAddress)}:${state.totalSupply}`;
+  if (state.sampleScanKey === scanKey || state.samplesScanning) return;
+
+  state.samplesScanning = true;
+  renderSampleGrid();
+
+  try {
+    await refreshTotalSupply();
+    const currentScanKey = `${checksumlessAddress(config.tokenAddress)}:${state.totalSupply}`;
+    const tokenIds = Array.from({ length: state.totalSupply }, (_, index) => String(index + 1));
+    const liveTokens = [];
+
+    await mapWithConcurrency(tokenIds, 6, async (tokenId) => {
+      try {
+        liveTokens.push(await loadMintedToken(tokenId));
+      } catch (error) {
+        console.warn(`Unable to load token #${tokenId}`, error);
+      }
+    });
+
+    const imageByTokenHash = new Map(
+      state.samples
+        .filter((sample) => sample.image && sample.hash)
+        .map((sample) => [`${sample.id}:${checksumlessAddress(sample.hash)}`, sample.image]),
+    );
+
+    state.samples = liveTokens
+      .map((token) => ({
+        ...token,
+        image: token.image || imageByTokenHash.get(`${token.id}:${checksumlessAddress(token.hash)}`) || "",
+      }))
+      .sort((a, b) => Number(b.id) - Number(a.id));
+    state.sampleScanKey = currentScanKey;
+  } finally {
+    state.samplesScanning = false;
+    if (state.sortMode !== "collector") renderSampleGrid();
+  }
+}
+
+async function loadMintedToken(tokenId) {
+  const tokenData = await loadTokenOnChainData(tokenId);
+  return {
+    id: tokenId,
+    name: tokenData.metadata?.name || `Runners Standing Still #${tokenId}`,
+    image: tokenData.metadata?.image || "",
+    metadata: tokenData.metadata,
+    traitsScript: sharedTraitsScriptFromMetadata(tokenData.metadata),
+    hash: tokenData.hash,
+    owner: tokenData.owner,
+    minter: tokenData.minter,
+    addedAt: Number(tokenId),
+  };
+}
+
+function invalidateTokenScans() {
+  state.sampleScanKey = "";
+  state.collectorScanKey = "";
 }
 
 function resetCollectorScan() {
@@ -686,42 +670,24 @@ function rememberMintedToken(token) {
     ...state.samples.filter((existing) => String(existing.id) !== String(token.id)),
   ];
   rememberCollectorToken(token);
+  state.sampleScanKey = `${checksumlessAddress(config.tokenAddress)}:${state.totalSupply}`;
   if (state.sortMode !== "collector") renderSampleGrid();
 }
 
-async function updateMintedTokenThumbnail(token) {
-  try {
-    const image = await captureFrameThumbnail(els.mintModalPreview);
-    replaceMintedToken({ ...token, image, thumbnailPending: false });
-  } catch (error) {
-    console.warn("Unable to capture mint thumbnail", error);
-    replaceMintedToken({ ...token, thumbnailPending: false });
-  }
-}
-
 function replaceMintedToken(token) {
-  state.samples = state.samples.map((sample) => (
-    String(sample.id) === String(token.id) ? token : sample
-  ));
-  state.collectorTokens = state.collectorTokens.map((sample) => (
-    String(sample.id) === String(token.id) ? token : sample
-  ));
+  state.samples = upsertToken(state.samples, token);
+  state.collectorTokens = upsertToken(state.collectorTokens, token);
   renderSampleGrid();
 }
 
-async function captureFrameThumbnail(frame) {
-  await waitForFrameCompletion(frame);
-  const canvas = frame.contentDocument?.querySelector("canvas");
-  if (!canvas) throw new Error("No canvas found for thumbnail capture.");
-  return canvas.toDataURL("image/png");
-}
-
-async function waitForFrameCompletion(frame) {
-  for (let attempt = 0; attempt < 900; attempt += 1) {
-    if (frame.contentWindow?.__textureMelt?.completed === true) return;
-    await delay(100);
+function upsertToken(tokens, token) {
+  const nextTokens = tokens.map((sample) => (
+    String(sample.id) === String(token.id) ? token : sample
+  ));
+  if (!nextTokens.some((sample) => String(sample.id) === String(token.id))) {
+    nextTokens.unshift(token);
   }
-  throw new Error("Timed out waiting for thumbnail render.");
+  return nextTokens;
 }
 
 function collectorEmptyMessage() {
@@ -730,9 +696,25 @@ function collectorEmptyMessage() {
   return "No mints found for this wallet yet.";
 }
 
+function liveMintEmptyMessage() {
+  if (state.samplesScanning) return "Loading minted iterations...";
+  if (!config.tokenAddress || !config.rpcUrl) return "Contract configuration pending.";
+  return "No iterations minted yet.";
+}
+
 function buildHtml(input) {
-  const renderInputJson = JSON.stringify(input);
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Runners Standing Still Preview</title><style>html,body{width:100%;height:100%;margin:0;background:#f5f5f2}body{display:grid;place-items:center;overflow:hidden}canvas{display:block;max-width:100vw;max-height:100vh}</style></head><body><canvas></canvas><script>window.renderInput=${renderInputJson};window.tokenData=window.renderInput;function notifyParent(type,event){parent.postMessage({project:"runners-standing-still",type,features:window.$features||{},liveState:event?.detail?.liveState||window.__textureMelt?.liveState||null},"*")}window.addEventListener("runners-standing-still:initialized",event=>notifyParent("initialized",event));window.addEventListener("runners-standing-still:complete",event=>notifyParent("complete",event));window.addEventListener("runners-standing-still:live-block",event=>notifyParent("live-block",event));</script><script>${state.rendererScript}</script></body></html>`;
+  const { traitsScript: rawTraitsScript, ...renderInput } = input;
+  const renderInputJson = JSON.stringify(renderInput);
+  const traitsScript = typeof rawTraitsScript === "string" ? rawTraitsScript : "";
+  const staticPreview = input.staticPreview === true
+    || input.disableLive === true
+    || input.thumbnail === true
+    || input.mode === "thumbnail"
+    || input.mode === "static";
+  const staticPreviewScript = staticPreview
+    ? 'window.__RUNNER_STATIC_PREVIEW=true;window.addEventListener("runners-standing-still:complete",()=>{const noop=()=>0;window.fetch=()=>Promise.reject(new Error("static preview disables live RPC"));window.setInterval=noop;window.requestAnimationFrame=noop;},{once:true});'
+    : "";
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Runners Standing Still Preview</title><style>html,body{width:100%;height:100%;margin:0;background:#f5f5f2}body{display:grid;place-items:center;overflow:hidden}canvas{display:block;max-width:100vw;max-height:100vh}</style></head><body><canvas></canvas><script>window.renderInput=${renderInputJson};window.tokenData=window.renderInput;${traitsScript}${staticPreviewScript}function notifyParent(type,event){parent.postMessage({project:"runners-standing-still",type,features:window.$features||{},liveState:event?.detail?.liveState||window.__textureMelt?.liveState||null},"*")}window.addEventListener("runners-standing-still:initialized",event=>notifyParent("initialized",event));window.addEventListener("runners-standing-still:complete",event=>notifyParent("complete",event));window.addEventListener("runners-standing-still:live-block",event=>notifyParent("live-block",event));</script><script>${state.rendererScript}</script></body></html>`;
 }
 
 function versionedAssetUrl(url, version) {
@@ -809,21 +791,32 @@ function activeTokenId() {
 }
 
 async function loadTokenOnChainData(tokenId, options = {}) {
-  const { owner = true, seed = true, minter = true, revealed = true, mintBlock = false } = options;
-  const [ownerAddress, seedHash, minterAddress, revealedStatus, mintedAtBlock] = await Promise.all([
+  const { owner = true, seed = true, minter = true, metadata = true } = options;
+  const [ownerAddress, seedHash, minterAddress] = await Promise.all([
     owner ? readRunner("ownerOf", tokenId) : Promise.resolve(""),
     seed ? readRunner("tokenSeed", tokenId) : Promise.resolve(""),
     minter ? readRunner("tokenMinter", tokenId) : Promise.resolve(""),
-    revealed ? readRunner("tokenRevealed", tokenId) : Promise.resolve(false),
-    mintBlock ? readRunner("mintBlock", tokenId) : Promise.resolve(0n),
   ]);
+  const tokenMetadata = metadata && !isZeroHash(seedHash)
+    ? await loadTokenMetadata(tokenId)
+    : null;
+
   return {
     owner: ownerAddress,
     hash: seedHash,
     minter: minterAddress,
-    revealed: Boolean(revealedStatus) && !isZeroHash(seedHash),
-    mintBlock: mintedAtBlock,
+    metadata: tokenMetadata,
   };
+}
+
+async function loadTokenMetadata(tokenId) {
+  try {
+    const tokenUri = await readRunner("tokenURI", tokenId);
+    return decodeTokenMetadata(tokenUri);
+  } catch (error) {
+    console.warn(`Unable to load tokenURI for #${tokenId}`, error);
+    return null;
+  }
 }
 
 async function sendRunnerTransaction(method, args = [], options = {}) {
@@ -849,53 +842,23 @@ async function readRunner(method, ...args) {
 
 async function ethCall(data) {
   if (!config.tokenAddress || !config.rpcUrl) throw new Error("Missing contract configuration.");
+  return rpcRequest("eth_call", [{ to: config.tokenAddress, data }, "latest"]);
+}
+
+async function rpcRequest(method, params) {
   const response = await fetch(config.rpcUrl, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       jsonrpc: "2.0",
       id: Date.now(),
-      method: "eth_call",
-      params: [{ to: config.tokenAddress, data }, "latest"],
+      method,
+      params,
     }),
   });
   const payload = await response.json();
-  if (payload.error) throw new Error(payload.error.message || "Contract read failed.");
+  if (payload.error) throw new Error(payload.error.message || `${method} failed.`);
   return payload.result;
-}
-
-async function waitForRevealWindow(tokenId) {
-  const mintBlock = await readRunner("mintBlock", tokenId);
-  const revealBlock = mintBlock + 2n;
-
-  for (let attempt = 0; attempt < 150; attempt += 1) {
-    const currentBlock = await readBlockNumber();
-    if (currentBlock >= revealBlock) return;
-
-    updateMintModal({
-      status: `Mint confirmed. Waiting for reveal block ${revealBlock.toString()} (current ${currentBlock.toString()}).`,
-    });
-    await delay(2500);
-  }
-
-  throw new Error(`Reveal block ${revealBlock.toString()} was not reached in time.`);
-}
-
-async function readBlockNumber() {
-  if (!config.rpcUrl) throw new Error("Missing RPC configuration.");
-  const response = await fetch(config.rpcUrl, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: Date.now(),
-      method: "eth_blockNumber",
-      params: [],
-    }),
-  });
-  const payload = await response.json();
-  if (payload.error) throw new Error(payload.error.message || "Unable to read block number.");
-  return BigInt(payload.result);
 }
 
 async function waitForTransactionReceipt(txHash) {
@@ -963,7 +926,42 @@ function decodeContractValue(result, type) {
   if (type === "bool") return BigInt(result) !== 0n;
   if (type === "address") return checksumlessAddress(`0x${result.slice(-40)}`);
   if (type === "bytes32") return result;
+  if (type === "string") return decodeAbiString(result);
   throw new Error(`Unsupported contract return type: ${type}`);
+}
+
+function decodeAbiString(result) {
+  const clean = String(result || "").replace(/^0x/, "");
+  if (!clean) return "";
+  const offset = Number.parseInt(clean.slice(0, 64), 16) * 2;
+  const length = Number.parseInt(clean.slice(offset, offset + 64), 16);
+  const hex = clean.slice(offset + 64, offset + 64 + length * 2);
+  const bytes = hex.match(/.{1,2}/g)?.map((pair) => Number.parseInt(pair, 16)) || [];
+  return new TextDecoder().decode(new Uint8Array(bytes));
+}
+
+function decodeTokenMetadata(tokenUri) {
+  const json = decodeDataUri(tokenUri);
+  return JSON.parse(json);
+}
+
+function sharedTraitsScriptFromMetadata(metadata) {
+  const animationHtml = decodeDataUri(metadata?.animation_url || "");
+  if (typeof animationHtml !== "string" || !animationHtml) return "";
+
+  const match = animationHtml.match(/window\.__runnerTraits=\{[A-Za-z0-9_:".,-]+\};/);
+  return match ? match[0] : "";
+}
+
+function decodeDataUri(uri) {
+  const match = String(uri || "").match(/^data:([^,]*),(.*)$/s);
+  if (!match) return uri;
+  const metadata = match[1] || "";
+  const body = match[2] || "";
+  if (metadata.endsWith(";base64")) {
+    return atob(body);
+  }
+  return decodeURIComponent(body);
 }
 
 function checksumlessAddress(address) {

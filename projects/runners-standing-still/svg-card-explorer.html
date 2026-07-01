@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Runners SVG Card Explorer</title>
+    <link rel="icon" href="../../favicon.ico" sizes="any" />
+    <link rel="stylesheet" href="./svg-card-explorer.css" />
+    <script src="./svg-card-explorer.js" defer></script>
+  </head>
+  <body>
+    <main class="explorer">
+      <section class="stage" aria-label="SVG card preview">
+        <div class="card-wrap" data-card-wrap></div>
+      </section>
+
+      <form class="controls" data-controls>
+        <header>
+          <h1>SVG card explorer</h1>
+          <button type="button" data-random-hash>Random hash</button>
+        </header>
+
+        <label>
+          <span>Hash</span>
+          <input name="hash" data-control="hash" spellcheck="false" />
+        </label>
+
+        <div class="row">
+          <label>
+            <span>Iteration</span>
+            <input name="tokenId" data-control="tokenId" type="number" min="1" max="999" step="1" value="42" />
+          </label>
+          <label>
+            <span>Number</span>
+            <select name="numberMode" data-control="numberMode">
+              <option value="digits">digits only</option>
+              <option value="runner">RUNNER + digits</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="row">
+          <label>
+            <span>Placement</span>
+            <select name="numberPlacement" data-control="numberPlacement">
+              <option value="bottom-left">bottom left</option>
+              <option value="bottom-right" selected>bottom right</option>
+              <option value="top-left">top left</option>
+              <option value="center">center</option>
+            </select>
+          </label>
+          <label>
+            <span>Size</span>
+            <input name="numberSize" data-control="numberSize" type="range" min="34" max="190" value="84" />
+          </label>
+        </div>
+
+        <div class="row">
+          <label>
+            <span>Source</span>
+            <select name="sourceMode" data-control="sourceMode">
+              <option value="auto">auto</option>
+              <option value="g4">gradient-4pt</option>
+              <option value="rs">rich stripes</option>
+              <option value="gs">grayscale</option>
+            </select>
+          </label>
+          <label>
+            <span>Dither</span>
+            <select name="ditherPattern" data-control="ditherPattern">
+              <option value="auto">auto</option>
+              <option value="b4">bayer-4</option>
+              <option value="b8">bayer-8</option>
+              <option value="line">line</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="row">
+          <label>
+            <span>Palette</span>
+            <select name="paletteMode" data-control="paletteMode">
+              <option value="auto">auto</option>
+              <option value="div">diverging</option>
+              <option value="split">split complement</option>
+            </select>
+          </label>
+          <label>
+            <span>Background</span>
+            <select name="backgroundMode" data-control="backgroundMode">
+              <option value="auto">auto</option>
+              <option value="black">black</option>
+              <option value="dark">palette dark</option>
+              <option value="light">palette light</option>
+            </select>
+          </label>
+        </div>
+
+        <fieldset>
+          <label>
+            <input name="showTraits" data-control="showTraits" type="checkbox" />
+            <span>Show trait labels</span>
+          </label>
+          <label>
+            <input name="showBorder" data-control="showBorder" type="checkbox" checked />
+            <span>Show border</span>
+          </label>
+          <label>
+            <input name="useLeonDigits" data-control="useLeonDigits" type="checkbox" checked />
+            <span>Use Leon paths for digits</span>
+          </label>
+        </fieldset>
+
+        <dl class="readout" data-readout></dl>
+      </form>
+    </main>
+  </body>
+</html>
